@@ -143,8 +143,8 @@ static int touchCallback(int frame, MTContact *contacts, int count, double times
     double duration = timestamp - lastContactStart;
     if (duration < 0.15 && c->size < 0.03) {
         // synthesize a left-click (press + release)
-        CGEventRef down = CGEventCreateMouseEvent(NULL, kCGEventLeftMouseDown, CGPointMake(screenX, screenY), kCGMouseButtonLeft);
-        CGEventRef up   = CGEventCreateMouseEvent(NULL, kCGEventLeftMouseUp,   CGPointMake(screenX, screenY), kCGMouseButtonLeft);
+        CGEventRef down = CGEventCreateMouseEvent(NULL, kCGEventLeftMouseDown, CGPointMake(newX, newY), kCGMouseButtonLeft);
+        CGEventRef up   = CGEventCreateMouseEvent(NULL, kCGEventLeftMouseUp,   CGPointMake(newX, newY), kCGMouseButtonLeft);
         if (down && up) {
             CGEventPost(kCGHIDEventTap, down);
             CGEventPost(kCGHIDEventTap, up);
