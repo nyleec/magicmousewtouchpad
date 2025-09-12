@@ -71,14 +71,57 @@ static int touchCallback(int frame, MTContact *contacts, int count, double times
     // Some devices present inverted Y; adjust if necessary
     ny = 1.0f - ny;
 
+    // Track previous touch position for relative movement
+    static float lastNx = -1.0f;
+    static float lastNy = -1.0f;
+
     // Get main display size
     CGSize screenSize = CGDisplayBounds(CGMainDisplayID()).size;
-    double screenX = nx * screenSize.width;
-    double screenY = ny * screenSize.height;
+    CGPoint mouseLoc = CGEventGetLocation(CGEventCreate(NULL));
 
-    NSLog(@"Touch: frame=%d id=%d state=%d unknown1=%f unknown2=%f x=%f y=%f size=%f unknown3=%f unknown4=%f angle=%f majorAxis=%f minorAxis=%f unknown5=%f", c->frame, c->identifier, c->state, c->unknown1, c->unknown2, nx, ny, c->size, c->unknown3, c->unknown4, c->angle, c->majorAxis, c->minorAxis, c->unknown5);
-    // Move cursor
-    CGWarpMouseCursorPosition(CGPointMake(screenX, screenY));
+    // Read sensitivity and smoothing from config.txt
+    static double sensitivity = 0.35;
+    static double smoothing = 0.5;
+    static int configRead = 0;
+    static double smoothX = 0.0, smoothY = 0.0;
+    if (!configRead) {
+        NSString *configPath = [[NSBundle mainBundle] pathForResource:@"config" ofType:@"txt"];
+        if (configPath) {
+            NSString *contents = [NSString stringWithContentsOfFile:configPath encoding:NSUTF8StringEncoding error:nil];
+            NSArray *lines = [contents componentsSeparatedByCharactersInSet:[NSCharacterSet newlineCharacterSet]];
+            for (NSString *line in lines) {
+                if ([line hasPrefix:@"sensitivity="]) {
+                    sensitivity = [[line substringFromIndex:12] doubleValue];
+                } else if ([line hasPrefix:@"smoothing="]) {
+                    smoothing = [[line substringFromIndex:10] doubleValue];
+                }
+            }
+        }
+        configRead = 1;
+    }
+
+    double deltaX = 0.0, deltaY = 0.0;
+    if (lastNx >= 0.0f && lastNy >= 0.0f) {
+        deltaX = (nx - lastNx) * screenSize.width * sensitivity;
+        deltaY = (ny - lastNy) * screenSize.height * sensitivity;
+    }
+
+    // Apply smoothing
+    smoothX = (smoothX * smoothing) + (deltaX * (1.0 - smoothing));
+    smoothY = (smoothY * smoothing) + (deltaY * (1.0 - smoothing));
+
+    double newX = mouseLoc.x + smoothX;
+    double newY = mouseLoc.y + smoothY;
+
+    NSLog(@"Touch: frame=%d id=%d state=%d x=%f y=%f size=%f deltaX=%f deltaY=%f smoothX=%f smoothY=%f newX=%f newY=%f", c->frame, c->identifier, c->state, nx, ny, c->size, deltaX, deltaY, smoothX, smoothY, newX, newY);
+
+    // Move cursor relatively
+    if (lastNx >= 0.0f && lastNy >= 0.0f) {
+        CGWarpMouseCursorPosition(CGPointMake(newX, newY));
+    }
+
+    lastNx = nx;
+    lastNy = ny;
 
     // If contact is very short and small movement -> generate click
     static double lastContactStart = 0;

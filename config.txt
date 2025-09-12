@@ -1,0 +1,4 @@
+# MagicMouseWTouchpad configuration
+# Edit these values to adjust sensitivity and smoothing
+sensitivity=0.35
+smoothing=0.5
