@@ -1,3 +1,4 @@
+
 // TouchManager.m
 #import "TouchManager.h"
 #import <CoreGraphics/CoreGraphics.h>
@@ -14,14 +15,31 @@ typedef struct {
     double timestamp;
     int identifier;
     int state;
-    float x;
-    float y;
+    float unknown1;
+    float unknown2;
+    float x; // normalized X [0..1]
+    float y; // normalized Y [0..1]
     float size;
+    float unknown3;
+    float unknown4;
+    float angle;
+    float majorAxis;
+    float minorAxis;
+    float unknown5;
     // many other fields exist; we only use normalized x/y here
 } MTContact;
 
 typedef int (*MTContactCallback)(int, MTContact*, int, double, int);
-
+    float unknown1;
+    float unknown2;
+    float normalizedPosition[2]; // x, y
+    float size;
+    float unknown3;
+    float unknown4;
+    float angle;
+    float majorAxis;
+    float minorAxis;
+    float unknown5;
 extern CFArrayRef MTDeviceCreateList(void);
 extern void MTRegisterContactFrameCallback(MTDeviceRef, MTContactCallback);
 extern void MTDeviceStart(MTDeviceRef, int);
@@ -47,8 +65,9 @@ static int touchCallback(int frame, MTContact *contacts, int count, double times
     MTContact *c = &contacts[0];
 
     // normalized coordinates (0..1) from the device — map to screen
-    float nx = c->x; // expected normalized [0..1]
-    float ny = c->y; // expected normalized [0..1]
+    float nx = c->x; // normalized X [0..1]
+    float ny = c->y; // normalized Y [0..1]
+
     // Some devices present inverted Y; adjust if necessary
     ny = 1.0f - ny;
 
@@ -57,6 +76,7 @@ static int touchCallback(int frame, MTContact *contacts, int count, double times
     double screenX = nx * screenSize.width;
     double screenY = ny * screenSize.height;
 
+    NSLog(@"Touch: frame=%d id=%d state=%d unknown1=%f unknown2=%f x=%f y=%f size=%f unknown3=%f unknown4=%f angle=%f majorAxis=%f minorAxis=%f unknown5=%f", c->frame, c->identifier, c->state, c->unknown1, c->unknown2, nx, ny, c->size, c->unknown3, c->unknown4, c->angle, c->majorAxis, c->minorAxis, c->unknown5);
     // Move cursor
     CGWarpMouseCursorPosition(CGPointMake(screenX, screenY));
 
@@ -99,9 +119,13 @@ static int touchCallback(int frame, MTContact *contacts, int count, double times
 - (void)start {
     if (gDevices) return;
     gDevices = MTDeviceCreateList();
-    if (!gDevices) return;
+    if (!gDevices) {
+        NSLog(@"No multitouch devices detected (MTDeviceCreateList returned NULL)");
+        return;
+    }
 
     CFIndex count = CFArrayGetCount(gDevices);
+    NSLog(@"Detected %ld multitouch device(s)", count);
     for (CFIndex i=0;i<count;i++) {
         MTDeviceRef dev = (MTDeviceRef)CFArrayGetValueAtIndex(gDevices, i);
         MTRegisterContactFrameCallback(dev, touchCallback);
