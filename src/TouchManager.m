@@ -78,8 +78,8 @@ static int touchCallback(int frame, MTContact *contacts, int count, double times
     // Get main display size
     CGSize screenSize = CGDisplayBounds(CGMainDisplayID()).size;
     CGPoint mouseLoc = CGEventGetLocation(CGEventCreate(NULL));
-
-    // Read sensitivity and smoothing from config.txt
+        static int ignoreInitial = 0;
+        static int ignoreInitialConfig = 3;
     static double sensitivity = 0.35;
     static double smoothing = 0.5;
     static int configRead = 0;
@@ -94,6 +94,8 @@ static int touchCallback(int frame, MTContact *contacts, int count, double times
                     sensitivity = [[line substringFromIndex:12] doubleValue];
                 } else if ([line hasPrefix:@"smoothing="]) {
                     smoothing = [[line substringFromIndex:10] doubleValue];
+                } else if ([line hasPrefix:@"ignore_initial="]) {
+                    ignoreInitialConfig = [[line substringFromIndex:14] intValue];
                 }
             }
         }
@@ -122,8 +124,12 @@ static int touchCallback(int frame, MTContact *contacts, int count, double times
 
     lastNx = nx;
     lastNy = ny;
-
-    // If contact is very short and small movement -> generate click
+        // Move cursor relatively, but ignore initial inputs to prevent jump
+        if (lastNx >= 0.0f && lastNy >= 0.0f && ignoreInitial == 0) {
+            CGWarpMouseCursorPosition(CGPointMake(newX, newY));
+        } else if (ignoreInitial > 0) {
+            ignoreInitial--;
+        }
     static double lastContactStart = 0;
     static double lastContactEnd = 0;
     static BOOL wasTouching = NO;
@@ -138,6 +144,9 @@ static int touchCallback(int frame, MTContact *contacts, int count, double times
     }
 
     // Very naive tap detection: if contact size small and time short (<0.15s)
+    if (!wasTouching) {
+        ignoreInitial = ignoreInitialConfig; // use config value
+    }
     // We can't detect release reliably here because the callback doesn't always include a release contact.
     // Instead, approximate: if time since start < 0.15 and size small, synthesize click.
     double duration = timestamp - lastContactStart;
