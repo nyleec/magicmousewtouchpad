@@ -1,4 +1,3 @@
-
 // TouchManager.m
 #import "TouchManager.h"
 #import <CoreGraphics/CoreGraphics.h>
@@ -194,6 +193,10 @@ static int touchCallback(int frame, MTContact *contacts, int count, double times
     }
     CFRelease(gDevices);
     gDevices = NULL;
+}
+
+- (BOOL)isRunning {
+    return gDevices != NULL;
 }
 
 @end
