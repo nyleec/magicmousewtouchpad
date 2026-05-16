@@ -1,7 +1,9 @@
+# Smoother cursor movement
 sensitivity=0.35
 smoothing=0.5
 ignore_initial=3
-# Tap/push thresholds
+
+# Tap/push thresholds... steadys cursor when clicking
 tap_time_threshold=0.15
 tap_size_threshold=0.03
 tap_move_threshold=10.0
