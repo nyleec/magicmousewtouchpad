@@ -78,9 +78,12 @@ static int touchCallback(int frame, MTContact *contacts, int count, double times
 
     // Get main display size
     CGSize screenSize = CGDisplayBounds(CGMainDisplayID()).size;
-    CGPoint mouseLoc = CGEventGetLocation(CGEventCreate(NULL));
-        static int ignoreInitial = 0;
-        static int ignoreInitialConfig = 3;
+    CGEventRef locEvent = CGEventCreate(NULL);
+    CGPoint mouseLoc = CGEventGetLocation(locEvent);
+    if (locEvent) CFRelease(locEvent);
+
+    static int ignoreInitial = 0;
+    static int ignoreInitialConfig = 3;
     static double sensitivity = 0.35;
     static double smoothing = 0.5;
     static double tapTimeThreshold = 0.15; // seconds
@@ -122,7 +125,7 @@ static int touchCallback(int frame, MTContact *contacts, int count, double times
     static double lastContactStart = 0;
     static int activeContactCount = 0;
     static int currentContactId = -1;
-    static float lastSize = 0.0f;
+    static float lastSize = -1.0f;
     if (!contactIsActive || timestamp - lastContactStart > 1.0 || c->identifier != currentContactId) {
         contactIsActive = YES;
         didFireClick = NO;
@@ -131,6 +134,11 @@ static int touchCallback(int frame, MTContact *contacts, int count, double times
         currentContactId = c->identifier;
         startNx = nx;
         startNy = ny;
+        lastSize = c->size;
+        smoothX = 0.0;
+        smoothY = 0.0;
+        lastNx = nx;
+        lastNy = ny;
     }
 
     double deltaX = 0.0, deltaY = 0.0;
@@ -153,15 +161,11 @@ static int touchCallback(int frame, MTContact *contacts, int count, double times
 
     NSLog(@"Touch: frame=%d id=%d state=%d x=%f y=%f size=%f deltaX=%f deltaY=%f smoothX=%f smoothY=%f newX=%f newY=%f moveFromStart=%f", c->frame, c->identifier, c->state, nx, ny, c->size, deltaX, deltaY, smoothX, smoothY, newX, newY, moveFromStartMag);
 
-    // Detect quick tap: small size, short duration, and little movement
     double duration = timestamp - lastContactStart;
-    BOOL isQuickTap = (duration < tapTimeThreshold && c->size < tapSizeThreshold
-        && moveFromStartMag < tapMoveThreshold);
-    // Detect push (pressure) click: sudden large size
-    BOOL isPushClick = (c->size > pushSizeThreshold && (c->size - lastSize) > 0.3);
+    BOOL isQuickTap = (duration < tapTimeThreshold && c->size < tapSizeThreshold && moveFromStartMag < tapMoveThreshold && lastSize >= 0.0f);
+    BOOL isPushClick = (lastSize >= 0.0f && c->size > pushSizeThreshold && (c->size - lastSize) > 0.3);
 
     if (didFireClick) {
-        // suppress movement and click generation until a new contact begins
         lastSize = c->size;
         return 0;
     }
