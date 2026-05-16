@@ -1,5 +1,8 @@
-# MagicMouseWTouchpad configuration
-# Edit these values to adjust sensitivity and smoothing
 sensitivity=0.35
 smoothing=0.5
 ignore_initial=3
+# Tap/push thresholds
+tap_time_threshold=0.15
+tap_size_threshold=0.03
+tap_move_threshold=10.0
+push_size_threshold=0.5
