@@ -6,6 +6,7 @@
 {
     EventHotKeyRef hotKeyRef;
     EventHandlerRef hotKeyHandlerRef;
+    NSStatusItem *statusItem;
 }
 - (void)toggleTouchManager:(id)sender;
 @end
@@ -38,6 +39,18 @@ static OSStatus HotKeyHandler(EventHandlerCallRef nextHandler, EventRef theEvent
     } else {
         NSLog(@"Registered global hotkey Cmd+Shift+T to toggle touchpad features");
     }
+
+    // Add a status bar item that shows the app version and provides a small menu
+    NSString *version = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleShortVersionString"];
+    if (!version) version = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleVersion"];
+    NSString *title = [NSString stringWithFormat:@"MagicMouse v%@", version ?: @"?"];
+    statusItem = [[NSStatusBar systemStatusBar] statusItemWithLength:NSVariableStatusItemLength];
+    if (statusItem.button) statusItem.button.title = title;
+    NSMenu *menu = [NSMenu new];
+    [menu addItemWithTitle:@"Toggle Touch" action:@selector(toggleTouchManager:) keyEquivalent:@""];
+    [menu addItem:[NSMenuItem separatorItem]];
+    [menu addItemWithTitle:@"Quit" action:@selector(terminate:) keyEquivalent:@"q"];
+    statusItem.menu = menu;
 }
 
 - (void)toggleTouchManager:(id)sender {
@@ -45,9 +58,17 @@ static OSStatus HotKeyHandler(EventHandlerCallRef nextHandler, EventRef theEvent
     if ([mgr isRunning]) {
         [mgr stop];
         NSLog(@"TouchManager paused via hotkey");
+        // update status title to indicate paused
+        NSString *version = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleShortVersionString"];
+        if (!version) version = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleVersion"];
+        if (statusItem.button) statusItem.button.title = [NSString stringWithFormat:@"MagicMouse v%@ (Paused)", version ?: @"?"];
     } else {
         [mgr start];
         NSLog(@"TouchManager started via hotkey");
+        // restore status title
+        NSString *version = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleShortVersionString"];
+        if (!version) version = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleVersion"];
+        if (statusItem.button) statusItem.button.title = [NSString stringWithFormat:@"MagicMouse v%@", version ?: @"?"];
     }
 }
 
@@ -59,6 +80,10 @@ static OSStatus HotKeyHandler(EventHandlerCallRef nextHandler, EventRef theEvent
     if (hotKeyHandlerRef) {
         RemoveEventHandler(hotKeyHandlerRef);
         hotKeyHandlerRef = NULL;
+    }
+    if (statusItem) {
+        [[NSStatusBar systemStatusBar] removeStatusItem:statusItem];
+        statusItem = nil;
     }
     [[TouchManager sharedManager] stop];
 }
