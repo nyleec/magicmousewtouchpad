@@ -9,6 +9,7 @@
     NSStatusItem *statusItem;
 }
 - (void)toggleTouchManager:(id)sender;
+- (void)openFirmwareURL:(id)sender;
 @end
 
 @implementation AppDelegate
@@ -48,9 +49,32 @@ static OSStatus HotKeyHandler(EventHandlerCallRef nextHandler, EventRef theEvent
     if (statusItem.button) statusItem.button.title = title;
     NSMenu *menu = [NSMenu new];
     [menu addItemWithTitle:@"Toggle Touch" action:@selector(toggleTouchManager:) keyEquivalent:@""];
+    NSMenuItem *fwPlaceholder = [[NSMenuItem alloc] initWithTitle:@"Checking firmware..." action:NULL keyEquivalent:@""];
+    [menu addItem:fwPlaceholder];
     [menu addItem:[NSMenuItem separatorItem]];
     [menu addItemWithTitle:@"Quit" action:@selector(terminate:) keyEquivalent:@"q"];
     statusItem.menu = menu;
+
+    // Kick off firmware check; if an update is available, replace the placeholder
+    [[TouchManager sharedManager] checkForFirmwareUpdatesWithCompletion:^(BOOL updateAvailable, NSString * _Nullable latestVersion, NSString * _Nullable updateURL) {
+        if (!statusItem || !statusItem.menu) return;
+        // Find the placeholder item we added (it should be the second item)
+        NSInteger idx = 1;
+        if (statusItem.menu.numberOfItems > idx) {
+            [statusItem.menu removeItemAtIndex:idx];
+        }
+        if (updateAvailable) {
+            NSString *title = [NSString stringWithFormat:@"Firmware update available: %@", latestVersion ?: @"?"];
+            NSMenuItem *fwItem = [[NSMenuItem alloc] initWithTitle:title action:@selector(openFirmwareURL:) keyEquivalent:@""];
+            fwItem.target = self;
+            if (updateURL) fwItem.representedObject = updateURL;
+            [statusItem.menu insertItem:fwItem atIndex:1];
+        } else {
+            NSMenuItem *ok = [[NSMenuItem alloc] initWithTitle:@"Firmware up to date" action:NULL keyEquivalent:@""];
+            ok.enabled = NO;
+            [statusItem.menu insertItem:ok atIndex:1];
+        }
+    }];
 }
 
 - (void)toggleTouchManager:(id)sender {
@@ -86,6 +110,15 @@ static OSStatus HotKeyHandler(EventHandlerCallRef nextHandler, EventRef theEvent
         statusItem = nil;
     }
     [[TouchManager sharedManager] stop];
+}
+
+- (void)openFirmwareURL:(id)sender {
+    NSString *urlStr = nil;
+    if ([sender isKindOfClass:[NSMenuItem class]]) urlStr = ((NSMenuItem *)sender).representedObject;
+    if (!urlStr && [sender isKindOfClass:[NSString class]]) urlStr = (NSString *)sender;
+    if (urlStr) {
+        [[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:urlStr]];
+    }
 }
 
 @end
