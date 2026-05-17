@@ -180,8 +180,8 @@ static int touchCallback(int frame, MTContact *contacts, int count, double times
         CGEventRef down = CGEventCreateMouseEvent(NULL, downType, CGPointMake(newX, newY), button);
         CGEventRef up = CGEventCreateMouseEvent(NULL, upType, CGPointMake(newX, newY), button);
         if (down && up) {
-            CGEventPost(kCGHIDEventTap, down);
-            CGEventPost(kCGHIDEventTap, up);
+            CGEventPost(kCGAnnotatedSessionEventTap, down);
+            CGEventPost(kCGAnnotatedSessionEventTap, up);
         }
         if (down) CFRelease(down);
         if (up) CFRelease(up);
@@ -194,13 +194,13 @@ static int touchCallback(int frame, MTContact *contacts, int count, double times
     }
 
     lastSize = c->size;
-// Move cursor relatively (only when not suppressing)
+    // Move cursor relatively by synthesizing a mouse-move event.
     if (lastNx >= 0.0f && lastNy >= 0.0f) {
-        CGWarpMouseCursorPosition(CGPointMake(newX, newY));
-    } else if (lastNx < 0.0f) {
-        // first valid frame; set last positions without moving
-        lastNx = nx;
-        lastNy = ny;
+        CGEventRef moveEvent = CGEventCreateMouseEvent(NULL, kCGEventMouseMoved, CGPointMake(newX, newY), kCGMouseButtonLeft);
+        if (moveEvent) {
+            CGEventPost(kCGAnnotatedSessionEventTap, moveEvent);
+            CFRelease(moveEvent);
+        }
     }
 
     lastNx = nx;
