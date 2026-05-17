@@ -78,12 +78,9 @@ static int touchCallback(int frame, MTContact *contacts, int count, double times
 
     // Get main display size
     CGSize screenSize = CGDisplayBounds(CGMainDisplayID()).size;
-    CGEventRef locEvent = CGEventCreate(NULL);
-    CGPoint mouseLoc = CGEventGetLocation(locEvent);
-    if (locEvent) CFRelease(locEvent);
-
-    static int ignoreInitial = 0;
-    static int ignoreInitialConfig = 3;
+    CGPoint mouseLoc = CGEventGetLocation(CGEventCreate(NULL));
+        static int ignoreInitial = 0;
+        static int ignoreInitialConfig = 3;
     static double sensitivity = 0.35;
     static double smoothing = 0.5;
     static double tapTimeThreshold = 0.15; // seconds
@@ -120,25 +117,11 @@ static int touchCallback(int frame, MTContact *contacts, int count, double times
 
 
     // Initialize start position when contact begins
-    static BOOL contactIsActive = NO;
-    static BOOL didFireClick = NO;
     static double lastContactStart = 0;
-    static int activeContactCount = 0;
-    static int currentContactId = -1;
-    static float lastSize = -1.0f;
-    if (!contactIsActive || timestamp - lastContactStart > 1.0 || c->identifier != currentContactId) {
-        contactIsActive = YES;
-        didFireClick = NO;
-        lastContactStart = timestamp;
-        activeContactCount = count;
-        currentContactId = c->identifier;
+    if (lastContactStart == 0 || timestamp - lastContactStart > 1.0) {
+        // new contact group
         startNx = nx;
         startNy = ny;
-        lastSize = c->size;
-        smoothX = 0.0;
-        smoothY = 0.0;
-        lastNx = nx;
-        lastNy = ny;
     }
 
     double deltaX = 0.0, deltaY = 0.0;
@@ -161,40 +144,38 @@ static int touchCallback(int frame, MTContact *contacts, int count, double times
 
     NSLog(@"Touch: frame=%d id=%d state=%d x=%f y=%f size=%f deltaX=%f deltaY=%f smoothX=%f smoothY=%f newX=%f newY=%f moveFromStart=%f", c->frame, c->identifier, c->state, nx, ny, c->size, deltaX, deltaY, smoothX, smoothY, newX, newY, moveFromStartMag);
 
+    // Detect quick tap: small size, short duration, and little movement
     double duration = timestamp - lastContactStart;
-    BOOL isQuickTap = (duration < tapTimeThreshold && c->size < tapSizeThreshold && moveFromStartMag < tapMoveThreshold && lastSize >= 0.0f);
-    BOOL isPushClick = (lastSize >= 0.0f && c->size > pushSizeThreshold && (c->size - lastSize) > 0.3);
+    BOOL isQuickTap = (duration < tapTimeThreshold && c->size < tapSizeThreshold && moveFromStartMag < tapMoveThreshold);
 
-    if (didFireClick) {
-        lastSize = c->size;
-        return 0;
-    }
+    // Detect push (pressure) click: sudden large size
+    static float lastSize = 0.0f;
+    BOOL isPushClick = (c->size > pushSizeThreshold && (c->size - lastSize) > 0.3);
 
+    // Synthesize click for quick taps or push clicks; suppress cursor movement during those
     if (isQuickTap || isPushClick) {
-        int fingerCount = MAX(1, count);
-        BOOL useRightClick = (fingerCount >= 2 && isQuickTap);
-        CGEventType downType = useRightClick ? kCGEventRightMouseDown : kCGEventLeftMouseDown;
-        CGEventType upType = useRightClick ? kCGEventRightMouseUp : kCGEventLeftMouseUp;
-        CGMouseButton button = useRightClick ? kCGMouseButtonRight : kCGMouseButtonLeft;
-
-        CGEventRef down = CGEventCreateMouseEvent(NULL, downType, CGPointMake(newX, newY), button);
-        CGEventRef up = CGEventCreateMouseEvent(NULL, upType, CGPointMake(newX, newY), button);
+        CGEventRef down = CGEventCreateMouseEvent(NULL, kCGEventLeftMouseDown, CGPointMake(newX, newY), kCGMouseButtonLeft);
+        CGEventRef up   = CGEventCreateMouseEvent(NULL, kCGEventLeftMouseUp,   CGPointMake(newX, newY), kCGMouseButtonLeft);
         if (down && up) {
             CGEventPost(kCGHIDEventTap, down);
             CGEventPost(kCGHIDEventTap, up);
         }
         if (down) CFRelease(down);
-        if (up) CFRelease(up);
+        if (up)   CFRelease(up);
 
-        didFireClick = YES;
-        lastSize = c->size;
+        // prevent immediate re-fire
+        lastContactStart = timestamp + 0.5;
+
+        // update last positions to avoid jump after suppressed movement
         lastNx = nx;
         lastNy = ny;
+        lastSize = c->size;
         return 0;
     }
 
     lastSize = c->size;
-// Move cursor relatively (only when not suppressing)
+
+    // Move cursor relatively (only when not suppressing)
     if (lastNx >= 0.0f && lastNy >= 0.0f) {
         CGWarpMouseCursorPosition(CGPointMake(newX, newY));
     } else if (lastNx < 0.0f) {
