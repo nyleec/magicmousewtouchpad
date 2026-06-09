@@ -32,16 +32,54 @@ typedef struct {
 } MTContact;
 
 typedef int (*MTContactCallback)(int, MTContact*, int, double, int);
-    float unknown1;
-    float unknown2;
-    float normalizedPosition[2]; // x, y
-    float size;
-    float unknown3;
-    float unknown4;
-    float angle;
-    float majorAxis;
-    float minorAxis;
-    float unknown5;
+
+#define TOUCH_HISTORY_CAPACITY 2048
+static float gTouchHistory[TOUCH_HISTORY_CAPACITY][2];
+static int gTouchHistoryCount = 0;
+static int gTouchHistoryIndex = 0;
+
+static void appendTouchSample(float x, float y) {
+    gTouchHistory[gTouchHistoryIndex][0] = x;
+    gTouchHistory[gTouchHistoryIndex][1] = y;
+    gTouchHistoryIndex = (gTouchHistoryIndex + 1) % TOUCH_HISTORY_CAPACITY;
+    if (gTouchHistoryCount < TOUCH_HISTORY_CAPACITY) {
+        gTouchHistoryCount++;
+    }
+}
+
+static void computeMovementFromHistory(float sensitivity, float *outDX, float *outDY) {
+    if (gTouchHistoryCount < 2) {
+        *outDX = 0.0f;
+        *outDY = 0.0f;
+        return;
+    }
+
+    int samples = MIN(gTouchHistoryCount - 1, 8);
+    int currentIndex = (gTouchHistoryIndex + TOUCH_HISTORY_CAPACITY - 1) % TOUCH_HISTORY_CAPACITY;
+
+    float sumDX = 0.0f;
+    float sumDY = 0.0f;
+    for (int i = 0; i < samples; i++) {
+        int idx = (currentIndex + TOUCH_HISTORY_CAPACITY - i) % TOUCH_HISTORY_CAPACITY;
+        int prevIdx = (idx + TOUCH_HISTORY_CAPACITY - 1) % TOUCH_HISTORY_CAPACITY;
+        float dx = gTouchHistory[idx][0] - gTouchHistory[prevIdx][0];
+        float dy = gTouchHistory[idx][1] - gTouchHistory[prevIdx][1];
+        sumDX += dx;
+        sumDY += dy;
+    }
+
+    float avgDX = sumDX / (float)samples;
+    float avgDY = sumDY / (float)samples;
+
+    float transform[2][2] = {
+        { sensitivity, 0.0f },
+        { 0.0f, sensitivity }
+    };
+
+    *outDX = transform[0][0] * avgDX + transform[0][1] * avgDY;
+    *outDY = transform[1][0] * avgDX + transform[1][1] * avgDY;
+}
+
 extern CFArrayRef MTDeviceCreateList(void);
 extern void MTRegisterContactFrameCallback(MTDeviceRef, MTContactCallback);
 extern void MTDeviceStart(MTDeviceRef, int);
@@ -72,6 +110,8 @@ static int touchCallback(int frame, MTContact *contacts, int count, double times
 
     // Some devices present inverted Y; adjust if necessary
     ny = 1.0f - ny;
+
+    appendTouchSample(nx, ny);
 
     // Track previous touch position for relative movement
     static float lastNx = -1.0f;
@@ -146,8 +186,11 @@ static int touchCallback(int frame, MTContact *contacts, int count, double times
 
     double deltaX = 0.0, deltaY = 0.0;
     if (lastNx >= 0.0f && lastNy >= 0.0f) {
-        deltaX = (nx - lastNx) * screenSize.width * sensitivity;
-        deltaY = (ny - lastNy) * screenSize.height * sensitivity;
+        float historyDX = 0.0f;
+        float historyDY = 0.0f;
+        computeMovementFromHistory(sensitivity, &historyDX, &historyDY);
+        deltaX = historyDX * screenSize.width;
+        deltaY = historyDY * screenSize.height;
     }
 
     // Movement since contact start (pixels)

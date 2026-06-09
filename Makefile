@@ -1,6 +1,6 @@
 APP_NAME = MagicMouseApp
 SRC = src/main.m src/TouchManager.m
-FRAMEWORKS = -framework Cocoa -framework Foundation -framework CoreGraphics -F/System/Library/PrivateFrameworks -framework MultitouchSupport -framework Carbon
+FRAMEWORKS = -framework Cocoa -framework Foundation -framework CoreGraphics -framework IOKit -F/System/Library/PrivateFrameworks -framework MultitouchSupport -framework Carbon
 
 
 all: $(APP_NAME).app
